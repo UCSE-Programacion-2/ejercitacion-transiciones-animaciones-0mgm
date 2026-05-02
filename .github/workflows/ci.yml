@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ejecutar validaciones automáticas
+        run: |
+          bash scripts/classroom-check.sh base-structure
+          bash scripts/classroom-check.sh css-linked
+          bash scripts/classroom-check.sh menu-underline-transition
+          bash scripts/classroom-check.sh social-hover-effect
+          bash scripts/classroom-check.sh spinner-animation

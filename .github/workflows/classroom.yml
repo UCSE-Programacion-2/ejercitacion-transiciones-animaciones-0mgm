@@ -1,0 +1,87 @@
+name: Pruebas automáticas (Classroom)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+  repository_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Archivos base y estructura
+        id: test-base-structure
+        uses: classroom-resources/autograding-io-grader@v1
+        with:
+          test-name: "Estructura base del proyecto y archivos requeridos"
+          command: "bash scripts/classroom-check.sh base-structure"
+          expected-output: "CORRECTO"
+          comparison-method: exact
+          timeout: 10
+          max-score: 20
+
+      - name: CSS enlazado correctamente
+        id: test-css-linked
+        uses: classroom-resources/autograding-io-grader@v1
+        with:
+          test-name: "index.html enlaza css/style_base.css"
+          command: "bash scripts/classroom-check.sh css-linked"
+          expected-output: "CORRECTO"
+          comparison-method: exact
+          timeout: 10
+          max-score: 15
+
+      - name: Menú con subrayado y transición
+        id: test-menu-underline-transition
+        uses: classroom-resources/autograding-io-grader@v1
+        with:
+          test-name: "Pseudo-elemento del menú con transición y hover"
+          command: "bash scripts/classroom-check.sh menu-underline-transition"
+          expected-output: "CORRECTO"
+          comparison-method: exact
+          timeout: 10
+          max-score: 20
+
+      - name: Hover interactivo en barra social
+        id: test-social-hover-effect
+        uses: classroom-resources/autograding-io-grader@v1
+        with:
+          test-name: "Barra social con transition y transform en hover"
+          command: "bash scripts/classroom-check.sh social-hover-effect"
+          expected-output: "CORRECTO"
+          comparison-method: exact
+          timeout: 10
+          max-score: 20
+
+      - name: Spinner animado con keyframes
+        id: test-spinner-animation
+        uses: classroom-resources/autograding-io-grader@v1
+        with:
+          test-name: "Spinner con animation infinita y keyframes de rotación"
+          command: "bash scripts/classroom-check.sh spinner-animation"
+          expected-output: "CORRECTO"
+          comparison-method: exact
+          timeout: 10
+          max-score: 25
+
+      - name: Informe de resultados para Classroom
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          TEST-BASE-STRUCTURE_RESULTS: "${{ steps.test-base-structure.outputs.result }}"
+          TEST-CSS-LINKED_RESULTS: "${{ steps.test-css-linked.outputs.result }}"
+          TEST-MENU-UNDERLINE-TRANSITION_RESULTS: "${{ steps.test-menu-underline-transition.outputs.result }}"
+          TEST-SOCIAL-HOVER-EFFECT_RESULTS: "${{ steps.test-social-hover-effect.outputs.result }}"
+          TEST-SPINNER-ANIMATION_RESULTS: "${{ steps.test-spinner-animation.outputs.result }}"
+        with:
+          runners: test-base-structure,test-css-linked,test-menu-underline-transition,test-social-hover-effect,test-spinner-animation

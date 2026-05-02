@@ -1,0 +1,198 @@
+# Crea issues de la actividad para repos creados desde GitHub Classroom.
+# Idempotente: crea solamente los issues faltantes por titulo.
+name: Setup assignment issues
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+  repository_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: setup-issues-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  ensure-assignment-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crear issues faltantes de la actividad
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 << 'PY'
+          import json
+          import os
+          import textwrap
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = os.environ["GITHUB_REPOSITORY"]
+          TOKEN = os.environ["GITHUB_TOKEN"]
+          API = "https://api.github.com"
+          ISSUE_LABEL = "classroom-assignment"
+
+          ISSUES = [
+              {
+                  "title": "[Entrega] Estructura base y enlace CSS",
+                  "body": """
+          ## Objetivo
+          Confirmar que el proyecto respeta la estructura de la ejercitación.
+
+          ## Qué debe cumplirse
+          - [ ] Existe `index.html` en la raíz.
+          - [ ] Existe la carpeta `css/`.
+          - [ ] Existe la carpeta `img/`.
+          - [ ] `index.html` enlaza correctamente `css/style_base.css`.
+
+          ## Nota
+          Este punto habilita las verificaciones restantes.""",
+              },
+              {
+                  "title": "[Requisito] Menú principal con subrayado animado",
+                  "body": """
+          ## Objetivo
+          Implementar el efecto de subrayado decorativo en los enlaces del menú.
+
+          ## Qué debe cumplirse
+          - [ ] Se usa pseudo-elemento `::before` en los enlaces del menú.
+          - [ ] El subrayado tiene un estado inicial oculto o mínimo.
+          - [ ] En `:hover` el subrayado se expande (por ejemplo hacia `width: 100%`).
+          - [ ] Existe `transition` para suavizar el cambio.""",
+              },
+              {
+                  "title": "[Requisito] Íconos sociales con hover y transition",
+                  "body": """
+          ## Objetivo
+          Mejorar la interacción visual de la barra social lateral.
+
+          ## Qué debe cumplirse
+          - [ ] En `.social ul li a` existe `transition`.
+          - [ ] En `.social ul li a:hover` se aplica un `transform` (scale/translate/rotate).
+          - [ ] El comportamiento visual es suave y legible.""",
+              },
+              {
+                  "title": "[Requisito] Spinner con animation y @keyframes",
+                  "body": """
+          ## Objetivo
+          Completar la animación continua del loader central.
+
+          ## Qué debe cumplirse
+          - [ ] `.spinner` define propiedad `animation`.
+          - [ ] Existe un bloque `@keyframes`.
+          - [ ] La animación rota desde `0deg` hasta `360deg`.
+          - [ ] La animación se ejecuta en bucle infinito.""",
+              },
+              {
+                  "title": "[Revisión docente] Fidelidad visual contra Resultado.gif",
+                  "body": """
+          ## Objetivo
+          Validar aspectos de calidad visual que no siempre se evalúan al 100% por script.
+
+          ## Checklist sugerida para el docente
+          - [ ] El resultado general se asemeja al `Resultado.gif`.
+          - [ ] Los tiempos de transición/animación son razonables.
+          - [ ] No hay cambios innecesarios en la estructura HTML.
+          - [ ] El CSS está ordenado y mantiene coherencia con la base.
+
+          ## Nota
+          Los tests automáticos ayudan, pero no reemplazan esta revisión.""",
+              },
+          ]
+
+          for _spec in ISSUES:
+              _spec["body"] = textwrap.dedent(_spec["body"]).strip()
+
+          def request(method, url, data=None):
+              headers = {
+                  "Authorization": f"Bearer {TOKEN}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              body = None
+              if data is not None:
+                  headers["Content-Type"] = "application/json; charset=utf-8"
+                  body = json.dumps(data).encode("utf-8")
+              req = urllib.request.Request(url, data=body, method=method, headers=headers)
+              with urllib.request.urlopen(req) as resp:
+                  return json.loads(resp.read().decode())
+
+          def list_existing_issue_titles():
+              titles = set()
+              page = 1
+              while True:
+                  url = f"{API}/repos/{REPO}/issues?state=all&per_page=100&page={page}"
+                  headers = {
+                      "Authorization": f"Bearer {TOKEN}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  }
+                  req = urllib.request.Request(url, headers=headers)
+                  with urllib.request.urlopen(req) as resp:
+                      batch = json.loads(resp.read().decode())
+                  if not batch:
+                      break
+                  for item in batch:
+                      if item.get("pull_request") is None:
+                          title = item.get("title", "").strip()
+                          if title:
+                              titles.add(title)
+                  if len(batch) < 100:
+                      break
+                  page += 1
+              return titles
+
+          def ensure_label_exists(label_name):
+              url = f"{API}/repos/{REPO}/labels/{urllib.parse.quote(label_name)}"
+              try:
+                  request("GET", url)
+                  return
+              except urllib.error.HTTPError as e:
+                  if e.code != 404:
+                      raise
+              request(
+                  "POST",
+                  f"{API}/repos/{REPO}/labels",
+                  {
+                      "name": label_name,
+                      "color": "1d76db",
+                      "description": "Issue generado automaticamente para la actividad de Classroom",
+                  },
+              )
+              print(f"Etiqueta creada: {label_name}")
+
+          existing_titles = list_existing_issue_titles()
+          ensure_label_exists(ISSUE_LABEL)
+
+          created_count = 0
+          skipped_count = 0
+          for spec in ISSUES:
+              if spec["title"] in existing_titles:
+                  skipped_count += 1
+                  print("Ya existe, se omite: " + spec["title"])
+                  continue
+              url = f"{API}/repos/{REPO}/issues"
+              created = request(
+                  "POST",
+                  url,
+                  {"title": spec["title"], "body": spec["body"], "labels": [ISSUE_LABEL]},
+              )
+              created_count += 1
+              print("Creado issue #" + str(created["number"]) + ": " + spec["title"])
+
+          print(
+              "Listo: "
+              + str(created_count)
+              + " issue(s) creado(s), "
+              + str(skipped_count)
+              + " ya existentes."
+          )
+          PY
